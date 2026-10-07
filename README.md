@@ -1,5 +1,7 @@
 # Folhear
 
+[![Captura de tela do Folhear](docs/captura.png)](https://joaogabrielmontinirossi-sys.github.io/folhear/)
+
 Um simulador de livro físico. Qualquer arquivo que você abrir (PDF, slides, e-book, documento, pasta de imagens) é encadernado num livro de capa dura, com guardas, miolo e lombada, e as folhas se curvam de verdade quando você as vira. Funciona no navegador, no celular e no Windows, com sincronização entre computadores pelo Google Drive.
 
 Os arquivos são abertos no próprio aparelho: nada é enviado para servidores.
@@ -92,3 +94,7 @@ Gera `dist\Folhear.exe`, com o aplicativo inteiro embutido.
 | `app/fonts/` | [Literata](https://github.com/googlefonts/literata) (SIL Open Font License), a letra do miolo |
 | `desktop/Folhear.cs` | Programa de Windows: serve o app em `localhost` e grava a pasta de sincronização |
 | `build.ps1` | Gera os ícones e compila o `.exe` |
+
+## Licença
+
+[MIT](LICENSE): pode usar, copiar, modificar e distribuir livremente, mantendo o aviso de autoria.
