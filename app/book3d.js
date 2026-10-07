@@ -1,5 +1,5 @@
 'use strict';
-/* Folhear — o livro físico: capa dura, guardas, miolo e a folha que se curva ao virar (WebGL).
+/* Folhear — o livro físico: capa dura, guardas, miolo e a folha que se curva ao virar (WebGL, com um desenho em Canvas 2D para os aparelhos sem ele).
    Unidades: a altura da página vale 1; a lombada fica em x = 0; a página da direita vai de x = 0 a x = W. */
 
 const OV = 0.032; // quanto a capa sobra além das folhas
@@ -184,32 +184,42 @@ void main() {
 
   function create(canvas, cb = {}) {
     const attrs = { alpha: true, antialias: true, premultipliedAlpha: true, depth: true };
-    const gl = canvas.getContext('webgl2', attrs) || canvas.getContext('webgl', attrs);
-    if (!gl) throw new Error('Este aparelho não tem WebGL, necessário para desenhar o livro');
-    const gl2 = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext;
-    const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
-    const prog = gl.createProgram();
-    gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
-    gl.useProgram(prog);
-    const U = {};
-    for (let i = 0, n = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS); i < n; i++) { const u = gl.getActiveUniform(prog, i); U[u.name] = gl.getUniformLocation(prog, u.name); }
-    const set = (name, ...v) => { const l = U[name]; if (l) gl['uniform' + v.length + 'f'](l, ...v); };
-    gl.uniform1i(U.uTexF, 0); gl.uniform1i(U.uTexB, 1);
-
-    const verts = new Float32Array((NX + 1) * (NY + 1) * 2), idx = new Uint16Array(NX * NY * 6);
-    for (let j = 0, k = 0; j <= NY; j++) for (let i = 0; i <= NX; i++) { verts[k++] = i / NX; verts[k++] = j / NY; }
-    for (let j = 0, k = 0; j < NY; j++) for (let i = 0; i < NX; i++) { const a = j * (NX + 1) + i, b = a + 1, c = a + NX + 1, d = c + 1; idx.set([a, c, b, b, c, d], k); k += 6; }
-    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
-    const loc = gl.getAttribLocation(prog, 'aUV');
-    gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    gl.clearColor(0, 0, 0, 0);
-    const aniso = gl.getExtension('EXT_texture_filter_anisotropic');
-    const coarse = matchMedia('(pointer: coarse)').matches;
-    const MAXTEX = Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE), coarse ? 2048 : 3072);
-
+    const U = {}, uni = {}, coarse = matchMedia('(pointer: coarse)').matches;
+    let gl = null, g2 = null, gl2 = false, aniso = null, idx = null, MAXTEX = 1800;
+    function initGL() {
+      gl2 = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext;
+      const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+      const prog = gl.createProgram();
+      gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+      gl.useProgram(prog);
+      for (let i = 0, n = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS); i < n; i++) { const u = gl.getActiveUniform(prog, i); U[u.name] = gl.getUniformLocation(prog, u.name); }
+      gl.uniform1i(U.uTexF, 0); gl.uniform1i(U.uTexB, 1);
+      const verts = new Float32Array((NX + 1) * (NY + 1) * 2);
+      idx = new Uint16Array(NX * NY * 6);
+      for (let j = 0, k = 0; j <= NY; j++) for (let i = 0; i <= NX; i++) { verts[k++] = i / NX; verts[k++] = j / NY; }
+      for (let j = 0, k = 0; j < NY; j++) for (let i = 0; i < NX; i++) { const a = j * (NX + 1) + i, b = a + 1, c = a + NX + 1, d = c + 1; idx.set([a, c, b, b, c, d], k); k += 6; }
+      gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+      const loc = gl.getAttribLocation(prog, 'aUV');
+      gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      gl.clearColor(0, 0, 0, 0);
+      aniso = gl.getExtension('EXT_texture_filter_anisotropic');
+      MAXTEX = Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE), coarse ? 2048 : 3072);
+    }
+    try {
+      if (!cb.soft) gl = canvas.getContext('webgl2', attrs) || canvas.getContext('webgl', attrs);
+      if (gl) initGL();
+    } catch (e) { console.warn('WebGL falhou; o livro será desenhado em Canvas 2D', e); gl = null; }
+    if (!gl) {
+      // Sem WebGL (placa de vídeo bloqueada, navegador antigo): o mesmo livro é desenhado em Canvas 2D, com a folha cortada em tiras.
+      g2 = canvas.getContext('2d');
+      if (!g2) { const c = canvas.cloneNode(false); canvas.replaceWith(c); canvas = c; g2 = canvas.getContext('2d'); }
+      if (!g2) throw new Error('Este navegador não consegue desenhar o livro');
+    }
+    const set = (name, ...v) => { if (!gl) { uni[name] = v; return; } const l = U[name]; if (l) gl['uniform' + v.length + 'f'](l, ...v); };
+    const free = t => { if (gl && t) gl.deleteTexture(t); };
     let book = null, info = null, token = 0, tick = 0;
     let W = 2 / 3, mode = '', leaves = [], T = 0, maxPos = 0, pos = 0;
     let cw = 1, ch = 1, dpr = 1, ppu = 100, zoom = 1, texZoom = 1, panX = 0, panY = 0, camY = 0;
@@ -220,6 +230,7 @@ void main() {
 
     /* ---------- texturas ---------- */
     function upload(src) {
+      if (!gl) return src;
       const t = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, t);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
@@ -256,11 +267,11 @@ void main() {
         const g = c.getContext('2d');
         if (board) Covers.draw(g, c.width, c.height, id, info); else await book.draw(+id.slice(1), g, c.width, c.height);
         if (tk === token && !dead) {
-          if (f.tex) gl.deleteTexture(f.tex);
+          free(f.tex);
           f.tex = upload(c); f.px = px;
           if (faces.size > 18) { // solta as páginas que ficaram para trás
             const keep = new Set(needed().map(n => n[0]));
-            for (const [k2, v] of [...faces].sort((a, b) => a[1].used - b[1].used)) { if (faces.size <= 14) break; if (!keep.has(k2) && k2[0] === 'p') { if (v.tex) gl.deleteTexture(v.tex); faces.delete(k2); jobs.delete(k2); } }
+            for (const [k2, v] of [...faces].sort((a, b) => a[1].used - b[1].used)) { if (faces.size <= 14) break; if (!keep.has(k2) && k2[0] === 'p') { free(v.tex); faces.delete(k2); jobs.delete(k2); } }
           }
           invalidate();
         }
@@ -269,7 +280,7 @@ void main() {
       pump();
     }
     function dropFaces(only) {
-      for (const [k, f] of faces) if (!only || only(k)) { if (f.tex) gl.deleteTexture(f.tex); faces.delete(k); jobs.delete(k); }
+      for (const [k, f] of faces) if (!only || only(k)) { free(f.tex); faces.delete(k); jobs.delete(k); }
     }
 
     /* ---------- folhas ---------- */
@@ -364,7 +375,73 @@ void main() {
     }
 
     /* ---------- desenho ---------- */
+    /* ---------- o mesmo desenho sem WebGL ----------
+       A folha é cortada em tiras paralelas à dobra; cada tira é um pedaço plano do cilindro,
+       então basta uma transformação afim (encolher na direção da dobra, deslocar, ampliar pela altura). */
+    function quad2d(kind, x, y, w, h, o) {
+      const g = g2, k = dpr * ppu * zoom, cx = uni.uCam[0], cy = uni.uCam[1], dir = o.dir || 1, col = o.color || [0, 0, 0, 1];
+      const css = (c, m) => `rgb(${c.slice(0, 3).map(v => Math.round(clamp(v * m, 0, 1) * 255)).join(',')})`;
+      g.setTransform(k, 0, 0, -k, dpr * (cw / 2 + panX) - cx * k, dpr * (ch / 2 - panY) + cy * k);
+      if (kind === 3) { // sombra do livro na mesa (o livro cobre o retângulo; sobra só o borrão)
+        g.save(); g.shadowColor = 'rgba(0,0,0,.55)'; g.shadowBlur = 0.07 * k; g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(x + 0.1, y + 0.1, w - 0.2, h - 0.2); g.restore();
+        return;
+      }
+      if (kind === 1) { g.fillStyle = css(col, 0.97); g.fillRect(x, y, w, h); return; }
+      if (kind === 2) { // corte das folhas
+        g.fillStyle = css(col, 0.9); g.fillRect(x, y, w, h);
+        g.fillStyle = 'rgba(0,0,0,.13)';
+        const n = Math.max(2, Math.round(col[3]));
+        for (let i = 0; i < n; i++) { if (o.flipF) g.fillRect(x, y + h * i / n, w, h / n * 0.35); else g.fillRect(x + w * i / n, y, w / n * 0.35, h); }
+        return;
+      }
+      const gutter = () => {
+        if (!o.gutter) return;
+        const sx = o.spineU ? x + w : x, gr = g.createLinearGradient(sx, 0, sx + (o.spineU ? -1 : 1) * w * 0.5, 0);
+        gr.addColorStop(0, 'rgba(0,0,0,.4)'); gr.addColorStop(0.06, 'rgba(0,0,0,.14)'); gr.addColorStop(0.24, 'rgba(0,0,0,.04)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = gr; g.fillRect(x, y, w, h);
+      };
+      const face = (img, flip) => { g.save(); g.translate(flip ? x + w : x, y + h); g.scale(flip ? -1 : 1, -1); g.drawImage(img, 0, 0, w, h); g.restore(); };
+      if (!o.mode) { face(o.f, o.flipF); gutter(); return; }
+
+      const F = o.fold, rigid = o.mode === 2, shadow = !!o.shadow, lcx = dir * cx;
+      const ax = rigid ? 0 : F.ax, ay = rigid ? 0 : F.ay, nx = rigid ? 1 : F.nx, ny = rigid ? 0 : F.ny, r = F.r, an = ax * nx + ay * ny, eps = shadow ? 0 : 1.2 / k;
+      g.scale(dir, 1);
+      // d0..d1: faixa da folha medida a partir do eixo; fd: onde o meio da faixa vai parar; kk: quanto ela encolhe; z: altura
+      function strip(d0, d1, fd, kk, z, back, lit) {
+        if (d1 <= d0 || (shadow && z < 0.004)) return;
+        const dc = (d0 + d1) / 2, e = kk - 1, tn = fd - kk * dc - e * an, s = 1 / (1 - z / CAM_H), B = 9;
+        g.save();
+        if (shadow) g.translate(dir * 0.34 * z, -0.46 * z); else { g.translate(lcx, cy); g.scale(s, s); g.translate(-lcx, -cy); }
+        g.transform(1 + e * nx * nx, e * nx * ny, e * nx * ny, 1 + e * ny * ny, nx * tn, ny * tn);
+        g.beginPath(); g.rect(x, y, w, h); g.clip();
+        const p0x = ax + nx * (d0 - eps), p0y = ay + ny * (d0 - eps), p1x = ax + nx * (d1 + eps), p1y = ay + ny * (d1 + eps);
+        g.beginPath(); g.moveTo(p0x - ny * B, p0y + nx * B); g.lineTo(p0x + ny * B, p0y - nx * B); g.lineTo(p1x + ny * B, p1y - nx * B); g.lineTo(p1x - ny * B, p1y + nx * B); g.closePath(); g.clip();
+        if (shadow) { g.fillStyle = `rgba(0,0,0,${(col[3] * 0.55 * clamp(z / 0.08, 0, 1)).toFixed(3)})`; g.fillRect(x, y, w, h); }
+        else {
+          face(back ? o.b || o.f : o.f, back ? o.flipB : o.flipF);
+          gutter();
+          const dark = 1 - (0.5 + 0.5 * Math.min(1, lit));
+          if (dark > 0.01) { g.fillStyle = `rgba(0,0,0,${dark.toFixed(3)})`; g.fillRect(x, y, w, h); }
+        }
+        g.restore();
+      }
+      if (rigid) {
+        const c = Math.cos(F.theta), sn = Math.sin(F.theta), N = 14, lit = Math.abs(-sn * dir * LIGHT[0] + c * LIGHT[2]) / LIGHT[2];
+        for (let i = 0; i < N; i++) { const d0 = w * i / N, d1 = w * (i + 1) / N, dc = (d0 + d1) / 2; strip(d0, d1, dc * c, c, dc * sn, c < 0, lit); }
+        return;
+      }
+      let dmin = 1e9, dmax = -1e9;
+      for (const [px, py] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) { const d = (px - ax) * nx + (py - ay) * ny; dmin = Math.min(dmin, d); dmax = Math.max(dmax, d); }
+      const hp = Math.PI * r, top = Math.min(dmax, hp), N = clamp(Math.ceil(top * k / 5), 4, 22);
+      strip(dmin, Math.min(0, dmax), (dmin + Math.min(0, dmax)) / 2, 1, 0, false, 1);
+      for (let i = 0; i < N && top > 0; i++) {
+        const d0 = top * i / N, d1 = top * (i + 1) / N, th = (d0 + d1) / 2 / r, c = Math.cos(th), sn = Math.sin(th);
+        strip(d0, d1, r * sn, c, r * (1 - c), c < 0, Math.abs(-(nx * dir * LIGHT[0] + ny * LIGHT[1]) * sn + c * LIGHT[2]) / LIGHT[2]);
+      }
+      if (dmax > hp) strip(hp, dmax, -((hp + dmax) / 2 - hp), -1, 2 * r, true, 0.93);
+    }
     function quad(kind, x, y, w, h, o = {}) {
+      if (!gl) return quad2d(kind, x, y, w, h, o);
       set('uKind', kind); set('uRect', x, y, w, h);
       set('uMode', o.mode || 0); set('uDir', o.dir || 1); set('uShadow', o.shadow ? 1 : 0);
       set('uColor', ...(o.color || [0, 0, 0, 1]));
@@ -405,8 +482,8 @@ void main() {
       const camX = f && f.state !== 'peek' ? restX(f.from) + (restX(f.to) - restX(f.from)) * e : restX(pos);
       for (const [id, prio] of needed()) want(id, prio);
 
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-      gl.disable(gl.DEPTH_TEST);
+      if (gl) { gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); gl.disable(gl.DEPTH_TEST); }
+      else { g2.setTransform(1, 0, 0, 1, 0, 0); g2.clearRect(0, 0, canvas.width, canvas.height); }
       set('uCam', camX, camY); set('uPPU', 2 * ppu / cw, 2 * ppu / ch); set('uPan', 2 * panX / cw, 2 * panY / ch); set('uZoom', zoom); set('uCamH', CAM_H);
       set('uLight', ...LIGHT); set('uGrain', W * 620, 620); set('uR', 0.01); set('uTheta', 0); set('uAxis', 99, 0); set('uN', 1, 0);
 
@@ -422,7 +499,7 @@ void main() {
       if (f) {
         const w = lw(f), h2 = lh(f), o = { mode: f.rigid ? 2 : 1, dir: f.dir, fold: fold(f), f: tex(f.front), b: tex(f.back), flipF: f.dir > 0 ? 0 : 1, flipB: f.dir > 0 ? 1 : 0, gutter: f.rigid ? 0 : 1, ghost: f.dir > 0 ? f.ghost : 0, ghostF: f.dir < 0 ? f.ghost : 0 };
         quad(4, 0, -h2, w, 2 * h2, { ...o, shadow: true, color: [0, 0, 0, 0.42] });
-        gl.enable(gl.DEPTH_TEST);
+        if (gl) gl.enable(gl.DEPTH_TEST);
         quad(0, 0, -h2, w, 2 * h2, o);
       }
       if (busy) invalidate();
@@ -435,7 +512,7 @@ void main() {
       if (r.width < 2 || r.height < 2) return;
       cw = r.width; ch = r.height; dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
-      gl.viewport(0, 0, canvas.width, canvas.height);
+      if (gl) gl.viewport(0, 0, canvas.width, canvas.height);
       if (!book) return;
       const aw = cw - 20, ah = ch - pad.t - pad.b, bw = W + OV, bh = 1 + 2 * OV;
       const pd = Math.min(aw / (2 * bw * 1.03), ah / (bh * 1.03)), ps = Math.min(aw / (bw * 1.04), ah / (bh * 1.03));
@@ -587,7 +664,7 @@ void main() {
       open(b, o = {}) {
         token++; dropFaces(); jobs.clear();
         book = b; info = o.cover; W = clamp(b.aspect, 0.3, 3); mode = ''; pos = 0; flip = null; queue = []; zoom = texZoom = 1; panX = panY = 0; tween = null;
-        if (blank) gl.deleteTexture(blank);
+        free(blank);
         blank = solid(b.kind === 'flow' ? Flow.PAPER : '#ffffff');
         resize();
         pos = posOf(o.page == null ? -1 : o.page);
@@ -597,7 +674,7 @@ void main() {
       /* o livro foi repaginado (mudou o tamanho da letra): redesenha tudo mantendo o ponto da leitura */
       refresh(page) { token++; dropFaces(k => k[0] === 'p'); flip = null; queue = []; build(); pos = posOf(page); invalidate(); if (cb.onPage) cb.onPage(state()); },
       recover() { token++; dropFaces(); invalidate(); },
-      close() { token++; dropFaces(); jobs.clear(); book = null; flip = null; if (raf) cancelAnimationFrame(raf); raf = 0; gl.clear(gl.COLOR_BUFFER_BIT); },
+      close() { token++; dropFaces(); jobs.clear(); book = null; flip = null; if (raf) cancelAnimationFrame(raf); raf = 0; if (gl) gl.clear(gl.COLOR_BUFFER_BIT); else { g2.setTransform(1, 0, 0, 1, 0, 0); g2.clearRect(0, 0, canvas.width, canvas.height); } },
       next: () => turn(1), prev: () => turn(-1),
       first: () => go(0), last: () => go(maxPos),
       goPage: (n, fast) => go(posOf(n), fast),

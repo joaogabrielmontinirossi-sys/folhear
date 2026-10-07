@@ -228,6 +228,7 @@ ${book.relayout ? `<button class="icon txt" data-act="smaller" title="Letra meno
   r.onchange = () => { if (+r.value === 0) view.first(); else view.goPage(+r.value - 1, true); r.blur(); };
   if (!view) {
     view = Book3D.create($('#gl'), {
+      soft: /2d/.test(location.hash), // #2d força o desenho sem WebGL
       onPage, onFlip: r2 => Sfx.flip(r2), onLand: r2 => Sfx.land(r2),
       onTap: dbl => { if (!dbl) { if (touch()) $('#reader').classList.toggle('idle'); else wake(); } },
       onLost: () => toast('A placa de vídeo reiniciou o desenho', { label: 'Recarregar', fn: () => location.reload() }),

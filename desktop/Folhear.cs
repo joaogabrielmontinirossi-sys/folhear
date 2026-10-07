@@ -13,7 +13,7 @@ using Microsoft.Win32;
 
 [assembly: AssemblyTitle("Folhear")]
 [assembly: AssemblyProduct("Folhear")]
-[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.0.1.0")]
 
 static class Program
 {
@@ -61,7 +61,7 @@ static class Program
         string profile = Path.Combine(DataDir, "profile");
         Directory.CreateDirectory(profile);
         ProcessStartInfo psi = new ProcessStartInfo(browser,
-            "--app=" + url + " --user-data-dir=\"" + profile + "\" --no-first-run --no-default-browser-check --disable-background-mode --window-size=1400,900");
+            "--app=" + url + " --user-data-dir=\"" + profile + "\" --no-first-run --no-default-browser-check --disable-background-mode --ignore-gpu-blocklist --enable-unsafe-swiftshader --window-size=1400,900");
         psi.UseShellExecute = false;
         using (Process p = Process.Start(psi))
         {

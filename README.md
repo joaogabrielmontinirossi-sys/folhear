@@ -29,6 +29,7 @@ Como o arquivo não é assinado, o Windows pode mostrar o aviso do SmartScreen n
 - **Capa dura.** O livro começa fechado. A capa de tecido traz o título em dourado e, nos PDFs, slides e álbuns, a primeira página estampada. A capa abre rígida, como uma tampa.
 - **Miolo.** O corte das folhas aparece na borda de fora e muda de espessura de cada lado conforme você avança.
 - **Som de papel** a cada folha (dá para desligar).
+- **Funciona sem WebGL.** Em computadores cuja placa de vídeo não oferece WebGL, o mesmo livro é desenhado em Canvas 2D, com a folha cortada em tiras: a dobra é a mesma, só a luz fica mais simples. O `Folhear.exe` também pede ao Edge para ignorar o bloqueio da placa de vídeo. Para forçar esse modo no site, abra o endereço com `#2d` no fim.
 
 | Para | Faça |
 | --- | --- |
