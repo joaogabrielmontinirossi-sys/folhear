@@ -1,6 +1,6 @@
 /* Folhear — service worker da versão web: guarda o app para abrir sem internet. */
-const VERSION = 'folhear-1.0.1-g1';
-const FILES = ['./', 'index.html', 'gsync.js', 'app.css', 'store.js', 'zip.js', 'flow.js', 'formats.js', 'pptx.js', 'book3d.js', 'app.js', 'logo.svg', 'manifest.webmanifest',
+const VERSION = 'folhear-1.0.1-g1-e1';
+const FILES = ['./', 'index.html', 'elo.js', 'gsync.js', 'app.css', 'store.js', 'zip.js', 'flow.js', 'formats.js', 'pptx.js', 'book3d.js', 'app.js', 'logo.svg', 'manifest.webmanifest',
   'lib/pdf.min.js', 'lib/pdf.worker.min.js', 'fonts/literata-400.woff2', 'fonts/literata-400i.woff2', 'fonts/literata-700.woff2', 'fonts/literata-700i.woff2',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png'];
 
