@@ -1,4 +1,5 @@
 'use strict';
+const GSync = window.GSyncLib || { web: false, on: () => false, io: null, html: () => '', off() {}, onChange: null };
 /* Folhear — estante, leitor, sons, backup e sincronização */
 
 let view = null, cur = null, book = null, Local = new Set();
@@ -401,11 +402,11 @@ async function syncFiles() {
   }
 }
 async function syncNow(manual) {
-  if (!Sync.on) return;
+  if (!Sync.on && !GSync.on()) return;
   if (Sync.busy) { Sync.again = true; return; }
   Sync.busy = true;
   try {
-    const r = await api('sync');
+    const r = await (Sync.on ? api('sync') : GSync.io());
     if (!r.ok) throw new Error('não foi possível ler a pasta');
     const text = r.status === 200 ? await r.text() : '', remote = text.trim() ? JSON.parse(text) : null;
     let pulled = 0;
@@ -415,10 +416,10 @@ async function syncNow(manual) {
     }
     const local = { app: 'folhear', version: 1, exported: Date.now(), books: S.books.filter(b => !b.seed), tombstones: DB.tomb() };
     if (!remote || syncSig(remote) !== syncSig(local)) {
-      const w = await api('sync', { method: 'POST', body: JSON.stringify(local) });
+      const w = await (Sync.on ? api('sync', { method: 'POST', body: JSON.stringify(local) }) : GSync.io({ method: 'POST', body: JSON.stringify(local) }));
       if (!w.ok) throw new Error('não foi possível gravar na pasta');
     }
-    await syncFiles();
+    if (Sync.on) await syncFiles();
     if (!S.set.syncedOnce) { S.set.syncedOnce = true; Store.saveSet(); }
     Sync.last = Date.now(); Sync.error = '';
     if (pulled) fixThumbs();
@@ -447,7 +448,7 @@ ${Sync.avail ? `<label>Sincronização com o Google Drive</label>
 <div class="row wrap">${Sync.on ? `<button class="btn ghost sm" data-k="syncnow">${ic('sync')} Sincronizar agora</button><button class="btn ghost sm" data-k="syncoff">Desativar</button>` : Sync.detected ? `<button class="btn sm" data-k="syncauto">Ativar em ${esc(Sync.detected)}</button>` : ''}<button class="btn ghost sm" data-k="syncpick">Escolher outra pasta…</button></div>
 ${Sync.drives.length > 1 ? `<p class="muted" style="margin-top:8px">Há mais de uma conta do Google Drive neste computador: cada unidade (G:, H:…) é uma conta.</p><div class="row wrap">${Sync.drives.map(d => `<button class="btn ghost sm" data-k="syncuse" data-path="${esc(d)}">${esc(d)}</button>`).join('')}</div>` : ''}
 <p class="muted" style="margin-top:8px">O Folhear grava o arquivo folhear-sync.json (estante, páginas e marcadores) e a subpasta “livros” (os arquivos) na pasta, e o Google Drive leva para os outros computadores.</p>`
-      : `<label>Sincronização</label><p class="muted">A sincronização automática pelo Google Drive funciona no aplicativo de Windows (Folhear.exe). Aqui, os livros ficam guardados neste aparelho. O backup leva a estante, as páginas em que você parou e os marcadores; ao abrir o mesmo arquivo no outro aparelho, tudo se encaixa.</p>`}
+      : `${GSync.web ? GSync.html() : `<label>Sincronização</label><p class="muted">A sincronização automática pelo Google Drive funciona no aplicativo de Windows (Folhear.exe). Aqui, os livros ficam guardados neste aparelho. O backup leva a estante, as páginas em que você parou e os marcadores; ao abrir o mesmo arquivo no outro aparelho, tudo se encaixa.</p>`}`}
 <label>Backup da estante</label><div class="row wrap"><button class="btn ghost sm" data-k="export">${ic('dl')} Exportar backup</button><button class="btn ghost sm" data-k="import">${ic('up')} Importar…</button></div>
 <label>Este aparelho</label><div class="row wrap"><button class="btn ghost sm" data-k="wipe">${ic('trash')} Apagar tudo</button></div>
 <p class="muted" style="margin-top:14px">Formatos: PDF, EPUB, PPTX, DOCX, ODT, FB2, CBZ, TXT, Markdown, HTML, RTF e imagens. Os arquivos são abertos no próprio aparelho; nada é enviado para servidores.</p>
@@ -467,7 +468,7 @@ ${Sync.drives.length > 1 ? `<p class="muted" style="margin-top:8px">Há mais de 
     if (k === 'export') saveBlob(new Blob([backupData()], { type: 'application/json' }), `folhear-backup-${dayKey(Date.now())}.json`);
     if (k === 'import') { m.close(); importBackup(await pickFiles('.json')); }
     if (k === 'wipe' && await confirmBox('Apagar tudo', 'Todos os livros, páginas marcadas e ajustes deste aparelho serão apagados. Isso não pode ser desfeito.' + (Sync.on ? ' A sincronização será desativada e a cópia no Google Drive continua lá.' : ''), 'Apagar tudo', true)) {
-      if (Sync.on) await api('sync/config', { method: 'POST', body: 'off' });
+      if (Sync.on) await api('sync/config', { method: 'POST', body: 'off' }); GSync.off();
       await Promise.all(DB.STORES.map(s => DB.clear(s)));
       location.reload();
     }
@@ -539,9 +540,10 @@ async function init() {
   fixThumbs();
   if (location.protocol === 'https:' && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(e => console.warn('Sem modo offline:', e));
   if (/^https?:$/.test(location.protocol)) await syncInfo();
-  if (Sync.avail) {
+  if (Sync.avail || GSync.web) {
+    GSync.onChange = () => syncNow(true);
     const first = Sync.on && !S.set.syncedOnce;
-    DB.onChange = () => { if (Sync.on) syncSoon(); };
+    DB.onChange = () => { if (Sync.on || GSync.on()) syncSoon(); };
     await syncNow();
     if (first && !Sync.error) toast('Sincronizando com o Google Drive: ' + Sync.folder);
     setInterval(() => syncNow(), 60000);
