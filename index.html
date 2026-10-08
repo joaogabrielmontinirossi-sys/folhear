@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Folhear</title>
+<meta name="description" content="Folhear — abre PDF, slides, e-books e documentos dentro de um livro físico, com páginas que se curvam ao virar.">
+<meta name="theme-color" content="#1f5a45">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Folhear">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="shelf">
+  <header id="top"></header>
+  <main id="books"></main>
+</div>
+<div id="reader" hidden>
+  <canvas id="gl"></canvas>
+  <div id="hint" hidden></div>
+  <header id="rbar"></header>
+  <footer id="rfoot"></footer>
+  <aside id="side" hidden></aside>
+</div>
+<div id="drop" hidden><div><b>Solte para colocar na estante</b><span>PDF, EPUB, PPTX, DOCX, ODT, FB2, CBZ, TXT, Markdown, HTML, RTF e imagens</span></div></div>
+<div id="busy" hidden><div class="busybox"><div class="spin"></div><p id="busytxt"></p></div></div>
+<div id="toast"></div>
+<input type="file" id="filepick" multiple hidden>
+<script src="gsync.js" data-app="folhear"></script>
+<script src="store.js"></script>
+<script src="zip.js"></script>
+<script src="flow.js"></script>
+<script src="formats.js"></script>
+<script src="pptx.js"></script>
+<script src="book3d.js"></script>
+<script src="app.js"></script>
+<script src="elo.js" data-app="folhear"></script>
+</body>
+</html>
